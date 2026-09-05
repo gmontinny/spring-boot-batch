@@ -1,0 +1,121 @@
+spring:
+  application:
+    name: gmontinny
+
+  datasource:
+    url: jdbc:postgresql://localhost:5432/${POSTGRES_DB:gmontinny}
+    username: ${POSTGRES_USER:gmontinny}
+    password: ${POSTGRES_PASSWORD:Gmontinny2026}
+    driver-class-name: org.postgresql.Driver
+    hikari:
+      maximum-pool-size: 10
+      minimum-idle: 2
+      connection-timeout: 30000
+      idle-timeout: 600000
+      max-lifetime: 1800000
+
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.PostgreSQLDialect
+        format_sql: true
+
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.xml
+    enabled: true
+
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: never
+
+  rabbitmq:
+    host: ${RABBITMQ_HOST:localhost}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_DEFAULT_USER:gmontinny}
+    password: ${RABBITMQ_DEFAULT_PASS:Gmontinny2026}
+    virtual-host: /
+    listener:
+      simple:
+        retry:
+          enabled: true
+          initial-interval: 2000
+          max-attempts: 3
+          multiplier: 2.0
+          max-interval: 10000
+        acknowledge-mode: auto
+        concurrency: 2
+        max-concurrency: 5
+    template:
+      retry:
+        enabled: true
+        initial-interval: 1000
+        max-attempts: 3
+        multiplier: 2.0
+
+  # ---------------------------------------------------------------------------
+  # Redis — rate limiting + blacklist de refresh tokens revogados
+  # ---------------------------------------------------------------------------
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:Redis2026}
+      timeout: 2000ms
+      lettuce:
+        pool:
+          max-active: 8
+          max-idle: 4
+          min-idle: 1
+
+server:
+  port: 8080
+
+# ---------------------------------------------------------------------------
+# Vault — secrets centralizados (JWT secret, DB password, etc.)
+# ---------------------------------------------------------------------------
+spring.cloud.vault:
+  host: ${VAULT_HOST:localhost}
+  port: ${VAULT_PORT:8200}
+  scheme: http
+  authentication: TOKEN
+  token: ${VAULT_DEV_TOKEN:gmontinny-vault-token}
+  kv:
+    enabled: true
+    backend: secret
+    default-context: gmontinny
+  fail-fast: false
+
+app:
+  jwt:
+    # Em produção: lido do Vault em secret/gmontinny → jwt.secret
+    secret: ${JWT_SECRET:3cfa76ef14937c1c0ea519f8fc057a80fcd04a7420f8e8bcd0a7567c272e007b}
+    expiration-ms: 900000          # 15 minutos (access token)
+    refresh-expiration-ms: 604800000  # 7 dias (refresh token)
+  batch:
+    chunk-size: 100
+    skip-limit: 10
+    thread-pool-size: 4
+    # cron: "0 0 2 * * *"
+  rate-limit:
+    # Limite por IP: 20 requisições por minuto na rota /auth/login
+    login-capacity: 20
+    login-refill-tokens: 20
+    login-refill-seconds: 60
+    # Limite geral por IP: 200 requisições por minuto
+    api-capacity: 200
+    api-refill-tokens: 200
+    api-refill-seconds: 60
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: alpha
+  show-actuator: false

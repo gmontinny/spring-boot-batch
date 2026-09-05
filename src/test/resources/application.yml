@@ -1,0 +1,58 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:testdb;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    driver-class-name: org.h2.Driver
+    username: sa
+    password:
+
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+    show-sql: false
+    properties:
+      hibernate:
+        dialect: org.hibernate.dialect.H2Dialect
+
+  liquibase:
+    enabled: false
+
+  batch:
+    job:
+      enabled: false
+    jdbc:
+      initialize-schema: always
+
+  rabbitmq:
+    host: localhost
+    port: 5672
+    username: guest
+    password: guest
+    listener:
+      simple:
+        auto-startup: false
+
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      password: ""
+
+  main:
+    allow-bean-definition-overriding: true
+
+app:
+  jwt:
+    secret: 3cfa76ef14937c1c0ea519f8fc057a80fcd04a7420f8e8bcd0a7567c272e007b
+    expiration-ms: 900000
+    refresh-expiration-ms: 604800000
+  batch:
+    chunk-size: 10
+    skip-limit: 5
+    thread-pool-size: 2
+  rate-limit:
+    login-capacity: 100
+    login-refill-tokens: 100
+    login-refill-seconds: 60
+    api-capacity: 1000
+    api-refill-tokens: 1000
+    api-refill-seconds: 60

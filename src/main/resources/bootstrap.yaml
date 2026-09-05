@@ -1,0 +1,20 @@
+spring:
+  application:
+    name: gmontinny
+
+  cloud:
+    vault:
+      enabled: ${VAULT_ENABLED:true}
+      host: ${VAULT_HOST:localhost}
+      port: ${VAULT_PORT:8200}
+      scheme: http
+      authentication: TOKEN
+      token: ${VAULT_DEV_TOKEN:gmontinny-vault-token}
+      kv:
+        enabled: true
+        backend: secret
+        default-context: gmontinny
+      fail-fast: false
+
+  config:
+    import: "optional:vault://"
