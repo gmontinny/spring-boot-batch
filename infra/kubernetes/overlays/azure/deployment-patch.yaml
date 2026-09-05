@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gmontinny
+  namespace: gmontinny
+spec:
+  template:
+    metadata:
+      labels:
+        azure.workload.identity/use: "true"
+    spec:
+      serviceAccountName: gmontinny
+      containers:
+        - name: gmontinny
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "768Mi"
+            limits:
+              cpu: "1500m"
+              memory: "1536Mi"
+          env:
+            # Azure Database for PostgreSQL Flexible Server
+            - name: POSTGRES_HOST
+              value: "<postgres_server>.postgres.database.azure.com"
+            # Azure Cache for Redis
+            - name: REDIS_HOST
+              value: "<redis_name>.redis.cache.windows.net"
+            - name: REDIS_PORT
+              value: "6380"
+            # Azure Service Bus (RabbitMQ via AMQP 1.0) ou RabbitMQ no AKS
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-svc"

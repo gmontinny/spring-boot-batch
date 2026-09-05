@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gmontinny
+  namespace: gmontinny
+spec:
+  template:
+    metadata:
+      annotations:
+        # Workload Identity — acesso a Secret Manager, Cloud SQL, etc.
+        iam.gke.io/gcp-service-account: "gmontinny@<project_id>.iam.gserviceaccount.com"
+    spec:
+      containers:
+        - name: gmontinny
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "768Mi"
+            limits:
+              cpu: "1500m"
+              memory: "1536Mi"
+          env:
+            # Cloud SQL via Cloud SQL Auth Proxy (sidecar) ou IP privado
+            - name: POSTGRES_HOST
+              value: "127.0.0.1"
+            # Memorystore Redis endpoint
+            - name: REDIS_HOST
+              value: "<memorystore_ip>"
+            # RabbitMQ no GKE (sem serviço gerenciado nativo — usar Helm ou CloudAMQP)
+            - name: RABBITMQ_HOST
+              value: "rabbitmq-svc"
+        # Cloud SQL Auth Proxy sidecar
+        - name: cloud-sql-proxy
+          image: gcr.io/cloud-sql-connectors/cloud-sql-proxy:2
+          args:
+            - "--structured-logs"
+            - "--port=5432"
+            - "<project_id>:<region>:<instance_name>"
+          securityContext:
+            runAsNonRoot: true
+          resources:
+            requests:
+              cpu: "100m"
+              memory: "128Mi"

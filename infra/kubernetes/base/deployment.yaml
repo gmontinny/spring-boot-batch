@@ -1,0 +1,107 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gmontinny
+  namespace: gmontinny
+  labels:
+    app: gmontinny
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: gmontinny
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: gmontinny
+      annotations:
+        # Vault Agent Injector — injeta secrets como arquivos em /vault/secrets/
+        vault.hashicorp.com/agent-inject: "true"
+        vault.hashicorp.com/role: "gmontinny"
+        vault.hashicorp.com/agent-inject-secret-config: "secret/data/gmontinny"
+        vault.hashicorp.com/agent-inject-template-config: |
+          {{- with secret "secret/data/gmontinny" -}}
+          export JWT_SECRET="{{ .Data.data.jwt.secret }}"
+          export DB_PASSWORD="{{ .Data.data.db.password }}"
+          export RABBITMQ_PASSWORD="{{ .Data.data.rabbitmq.password }}"
+          export REDIS_PASSWORD="{{ .Data.data.redis.password }}"
+          {{- end }}
+    spec:
+      serviceAccountName: gmontinny
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 1000
+        fsGroup: 1000
+      containers:
+        - name: gmontinny
+          image: gmontinny:latest
+          imagePullPolicy: Always
+          ports:
+            - containerPort: 8080
+              name: http
+          envFrom:
+            - configMapRef:
+                name: gmontinny-config
+          env:
+            - name: SPRING_DATASOURCE_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gmontinny-secrets
+                  key: DB_PASSWORD
+            - name: SPRING_RABBITMQ_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gmontinny-secrets
+                  key: RABBITMQ_PASSWORD
+            - name: SPRING_DATA_REDIS_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: gmontinny-secrets
+                  key: REDIS_PASSWORD
+            - name: APP_JWT_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: gmontinny-secrets
+                  key: JWT_SECRET
+            - name: SPRING_CLOUD_VAULT_TOKEN
+              valueFrom:
+                secretKeyRef:
+                  name: gmontinny-secrets
+                  key: VAULT_TOKEN
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            failureThreshold: 3
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: tmp
+              mountPath: /tmp
+      volumes:
+        - name: tmp
+          emptyDir: {}

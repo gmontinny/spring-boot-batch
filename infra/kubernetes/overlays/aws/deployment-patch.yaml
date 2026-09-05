@@ -1,0 +1,32 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: gmontinny
+  namespace: gmontinny
+spec:
+  template:
+    metadata:
+      annotations:
+        # IRSA — IAM Role for Service Account (acesso a Secrets Manager, S3, etc.)
+        eks.amazonaws.com/role-arn: "arn:aws:iam::<account_id>:role/gmontinny-eks-role"
+    spec:
+      serviceAccountName: gmontinny
+      containers:
+        - name: gmontinny
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "768Mi"
+            limits:
+              cpu: "1500m"
+              memory: "1536Mi"
+          env:
+            # RDS endpoint injetado via Terraform output
+            - name: POSTGRES_HOST
+              value: "<rds_endpoint>"
+            # ElastiCache endpoint
+            - name: REDIS_HOST
+              value: "<elasticache_endpoint>"
+            # AmazonMQ endpoint
+            - name: RABBITMQ_HOST
+              value: "<amazonmq_endpoint>"

@@ -11,7 +11,7 @@
 ![JWT](https://img.shields.io/badge/JWT-0.12.6-black?logo=jsonwebtokens)
 ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI%203.1-85EA2D?logo=swagger)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
-![Tests](https://img.shields.io/badge/Testes-55%2B%20casos-success?logo=junit5)
+![Tests](https://img.shields.io/badge/Testes-59%2B%20casos-success?logo=junit5)
 
 API REST para processamento em lote de dados CNAE a partir de planilhas Excel, com persistência em PostgreSQL, mensageria via RabbitMQ, segurança JWT com refresh token e rate limiting, secrets centralizados no HashiCorp Vault e documentação Swagger completa.
 
@@ -99,7 +99,7 @@ O **GMontinny** é uma aplicação Spring Boot que demonstra uma arquitetura com
 | Hypermedia | Spring HATEOAS |
 | Documentação | SpringDoc OpenAPI 3 (Swagger UI) |
 | Containerização | Docker + Docker Compose (4 serviços) |
-| Testes | JUnit 5 + Mockito (55+ casos) |
+| Testes | JUnit 5 + Mockito (59+ casos) |
 
 ---
 
@@ -282,16 +282,18 @@ POST /api/v1/batch/cnae/run  (thread HTTP retorna imediatamente)
 
 ### Utilização de Recursos
 
-O `AsyncJobLauncher` executa o job em thread separada (`job-launcher-*`), liberando imediatamente o thread HTTP. O `HikariCP` gerencia o pool de conexões com `maximum-pool-size: 10` e `minimum-idle: 2`.
+O `BatchConfig` estende `DefaultBatchConfiguration` e sobrescreve `getTaskExecutor()` com um `ThreadPoolTaskExecutor` assíncrono, liberando imediatamente o thread HTTP. O `HikariCP` gerencia o pool de conexões com `maximum-pool-size: 10` e `minimum-idle: 2`.
 
 ```java
-// BatchConfig.java
-@Bean @Primary
-public JobLauncher asyncJobLauncher() throws Exception {
-    TaskExecutorJobLauncher launcher = new TaskExecutorJobLauncher();
-    launcher.setTaskExecutor(new SimpleAsyncTaskExecutor("job-launcher-"));
-    launcher.afterPropertiesSet();
-    return launcher;
+// BatchConfig.java — extends DefaultBatchConfiguration
+@Override
+protected TaskExecutor getTaskExecutor() {
+    ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+    executor.setCorePoolSize(threadPoolSize);
+    executor.setMaxPoolSize(threadPoolSize * 2);
+    executor.setThreadNamePrefix("batch-worker-");
+    executor.initialize();
+    return executor;
 }
 ```
 
@@ -353,7 +355,7 @@ gmontinny/
 │
 ├── src/main/
 │   ├── java/br/com/gmontinny/
-│   │   ├── GmontinnyApplication.java          # @EnableBatchProcessing + @EnableScheduling
+│   │   ├── GmontinnyApplication.java          # @SpringBootApplication + @EnableScheduling
 │   │   │
 │   │   ├── batch/
 │   │   │   ├── CnaeRow.java
@@ -362,7 +364,7 @@ gmontinny/
 │   │   │   └── writer/CnaeItemWriter.java
 │   │   │
 │   │   ├── config/
-│   │   │   ├── BatchConfig.java               # Job, Step, AsyncJobLauncher, ThreadPool
+│   │   │   ├── BatchConfig.java               # extends DefaultBatchConfiguration — JdbcJobRepository, Job, Step, ThreadPool
 │   │   │   ├── RabbitMQConfig.java            # Exchange, Queue, DLQ, retry backoff
 │   │   │   ├── RedisConfig.java               # Bean ProxyManager<String> para Bucket4j
 │   │   │   ├── SecurityConfig.java            # FilterChain + RateLimitFilter + JWT
@@ -516,7 +518,7 @@ gmontinny/
 | `002-create-users.xml` | Tabela `users` |
 | `003-create-user-roles.xml` | Tabela `user_roles` (N:N) + FKs |
 | `004-create-cnae.xml` | Tabela `cnae` + índice `subclasse` |
-| `005-create-batch-metadata.xml` | 6 tabelas `BATCH_*` + sequences |
+| `005-create-batch-metadata.xml` | 6 tabelas `BATCH_*` + 4 sequences (incluindo `BATCH_JOB_INSTANCE_SEQ`) |
 | `006-insert-default-data.xml` | Roles padrão + usuário admin |
 | `007-create-refresh-tokens.xml` | Tabela `refresh_tokens` + índices + FK CASCADE |
 
@@ -798,8 +800,8 @@ Token: gmontinny-vault-token
 | `ItemReader` | `CnaeExcelReader` — lê `.xls` via Apache POI |
 | `ItemProcessor` | `CnaeItemProcessor` — valida, mapeia e publica no MQ |
 | `ItemWriter` | `CnaeItemWriter` — persiste via `saveAll()` |
-| `JobRepository` | Metadados no PostgreSQL (tabelas `BATCH_*`) |
-| `AsyncJobLauncher` | Execução não bloqueante (thread `job-launcher-*`) |
+| `JobRepository` | `JdbcJobRepository` — metadados persistidos no PostgreSQL (tabelas `BATCH_*`) |
+| `JobOperator` | `TaskExecutorJobOperator` — disparo e controle de jobs (substitui `JobLauncher` deprecated) |
 | `ThreadPoolTaskExecutor` | Pool de workers (`batch-worker-*`) |
 | `RunIdIncrementer` | Nova `JobInstance` a cada execução |
 | `faultTolerant()` | `skipLimit(10)` + `retryLimit(3)` |
@@ -893,9 +895,9 @@ db/changelog/
     ├── 002-create-users.xml
     ├── 003-create-user-roles.xml
     ├── 004-create-cnae.xml
-    ├── 005-create-batch-metadata.xml
+    ├── 005-create-batch-metadata.xml   ← inclui BATCH_JOB_INSTANCE_SEQ (Batch 6)
     ├── 006-insert-default-data.xml
-    └── 007-create-refresh-tokens.xml   ← novo
+    └── 007-create-refresh-tokens.xml
 ```
 
 ### Configuração
@@ -1152,7 +1154,7 @@ A API implementa HATEOAS seguindo o nível 3 do modelo de maturidade de Richards
 
 ### Estratégia
 
-44+ casos de teste cobrindo todas as camadas:
+59+ casos de teste cobrindo todas as camadas:
 
 - **Unitários** — `@ExtendWith(MockitoExtension.class)`, sem contexto Spring
 - **Contexto** — `@SpringBootTest` com `@TestPropertySource` e mocks de infraestrutura
@@ -1176,6 +1178,7 @@ Ambiente de teste: **H2 em memória**, Liquibase desabilitado, Vault desabilitad
 | `UserControllerTest` | Unitário | 6 | sort inválido → fallback id, sort válido, direction desc, 200, create 201, delete 204 |
 | `CnaeControllerTest` | Unitário | 5 | sort inválido → fallback id, sort válido desc, 200, search sort inválido, search 200 |
 | `GmontinnyApplicationTests` | Contexto | 1 | Spring context carrega sem erros |
+| `BatchJobIntegrationTest` | Integração | — | `@Disabled` — requer PostgreSQL (executar manualmente com Docker ativo) |
 
 ### Executar os Testes
 
@@ -1236,10 +1239,10 @@ O `GmontinnyApplicationTests` usa `@TestPropertySource` para sobrescrever propri
     ...
 })
 class GmontinnyApplicationTests {
-    @MockitoBean ConnectionFactory connectionFactory;      // RabbitMQ
+    @MockitoBean ConnectionFactory connectionFactory;         // RabbitMQ
     @MockitoBean RabbitTemplate rabbitTemplate;
-    @MockitoBean JobLauncher asyncJobLauncher;             // Spring Batch
     @MockitoBean ProxyManager<String> rateLimitProxyManager; // Redis/Bucket4j
+    // JobOperator gerenciado pelo DefaultBatchConfiguration — não precisa de mock
 }
 ```
 
@@ -1582,7 +1585,7 @@ public void runScheduled() { runCnaeImport(); }
 
 Este projeto usa Spring Boot **4.1.1** com Java **25** — versões de ponta que introduziram quebras de compatibilidade significativas em relação ao ecossistema anterior. As adaptações abaixo foram identificadas inspecionando os JARs diretamente.
 
-### Spring Batch 6.x — Pacotes Renomeados
+### Spring Batch 6.x — Pacotes Renomeados e API Alterada
 
 O Spring Batch 6.x reorganizou completamente seus pacotes. Os módulos `spring-batch-core` e `spring-batch-infrastructure` **não são exportados como API transitíva** pelo `spring-boot-starter-batch` 4.x e precisam ser declarados explicitamente:
 
@@ -1607,6 +1610,57 @@ implementation 'org.springframework.batch:spring-batch-infrastructure'
 | `org.springframework.batch.core.explore.JobExplorer` | `org.springframework.batch.core.repository.explore.JobExplorer` |
 | `org.springframework.batch.item.ItemStream` | `org.springframework.batch.infrastructure.item.ItemStream` |
 | `org.springframework.batch.item.ExecutionContext` | `org.springframework.batch.infrastructure.item.ExecutionContext` |
+
+#### API Deprecated no Batch 6
+
+| Deprecated | Substituto |
+|---|---|
+| `JobLauncher` | `JobOperator.start(Job, JobParameters)` |
+| `JobExplorer` | `JobRepository.getJobExecution(long)` |
+| `chunk(int, PlatformTransactionManager)` | `chunk(int)` — transactionManager inferido pelo contexto |
+
+#### Integração com Spring Boot 4 — `DefaultBatchConfiguration`
+
+O `BatchAutoConfiguration` do Boot 4 registra um `DefaultBatchConfiguration` com `ResourcelessJobRepository` (sem persistência). A condição de desativação é:
+
+```
+@ConditionalOnMissingBean(value = DefaultBatchConfiguration.class,
+                          annotation = EnableBatchProcessing.class)
+```
+
+A única forma correta de forçar o `JdbcJobRepository` é estender `DefaultBatchConfiguration`:
+
+```java
+@Configuration
+public class BatchConfig extends DefaultBatchConfiguration {
+
+    @Override
+    public JobRepository jobRepository() throws Exception {
+        JdbcJobRepositoryFactoryBean factory = new JdbcJobRepositoryFactoryBean();
+        factory.setDataSource(getDataSource());
+        factory.setTransactionManager(getTransactionManager());
+        factory.setTablePrefix("BATCH_");  // PostgreSQL: case-fold → batch_
+        factory.afterPropertiesSet();
+        return factory.getObject();
+    }
+}
+```
+
+> **Atenção**: `@EnableBatchProcessing` está **proibido** no Boot 4 — desabilita o autoconfigure e cria infraestrutura própria com datasource em memória.
+
+#### Sequence `BATCH_JOB_INSTANCE_SEQ`
+
+O Batch 6 renomeou a sequence `BATCH_JOB_SEQ` (usada no Batch 4/5) para `BATCH_JOB_INSTANCE_SEQ`. Schemas criados para versões anteriores precisam adicionar essa sequence:
+
+```xml
+<!-- 005-create-batch-metadata.xml -->
+<changeSet id="005-add-batch-job-instance-seq" author="gmontinny">
+    <preConditions onFail="MARK_RAN">
+        <not><sequenceExists sequenceName="batch_job_instance_seq"/></not>
+    </preConditions>
+    <createSequence sequenceName="BATCH_JOB_INSTANCE_SEQ" startValue="1" incrementBy="1"/>
+</changeSet>
+```
 
 ### Spring AMQP 4.x — API Alterada
 

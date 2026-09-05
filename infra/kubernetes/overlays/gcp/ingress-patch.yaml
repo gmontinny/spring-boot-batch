@@ -1,0 +1,40 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: gmontinny-ingress
+  namespace: gmontinny
+  annotations:
+    kubernetes.io/ingress.class: gce
+    kubernetes.io/ingress.global-static-ip-name: "gmontinny-ip"
+    networking.gke.io/managed-certificates: "gmontinny-cert"
+    networking.gke.io/v1beta1.FrontendConfig: "gmontinny-frontend"
+spec:
+  rules:
+    - host: gmontinny.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: gmontinny-svc
+                port:
+                  number: 80
+---
+apiVersion: networking.gke.io/v1
+kind: ManagedCertificate
+metadata:
+  name: gmontinny-cert
+  namespace: gmontinny
+spec:
+  domains:
+    - gmontinny.example.com
+---
+apiVersion: networking.gke.io/v1beta1
+kind: FrontendConfig
+metadata:
+  name: gmontinny-frontend
+  namespace: gmontinny
+spec:
+  redirectToHttps:
+    enabled: true
