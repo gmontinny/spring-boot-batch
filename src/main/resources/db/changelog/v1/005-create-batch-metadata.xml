@@ -130,4 +130,12 @@
 
     </changeSet>
 
+    <!-- Spring Batch 6 renamed BATCH_JOB_SEQ to BATCH_JOB_INSTANCE_SEQ -->
+    <changeSet id="005-add-batch-job-instance-seq" author="gmontinny">
+        <preConditions onFail="MARK_RAN">
+            <not><sequenceExists sequenceName="batch_job_instance_seq"/></not>
+        </preConditions>
+        <createSequence sequenceName="BATCH_JOB_INSTANCE_SEQ" startValue="1" incrementBy="1"/>
+    </changeSet>
+
 </databaseChangeLog>

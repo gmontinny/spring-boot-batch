@@ -32,6 +32,9 @@ spring:
       enabled: false
     jdbc:
       initialize-schema: never
+      table-prefix: "BATCH_"
+  main:
+    allow-bean-definition-overriding: true
 
   rabbitmq:
     host: ${RABBITMQ_HOST:localhost}

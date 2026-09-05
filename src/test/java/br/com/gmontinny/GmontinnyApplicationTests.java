@@ -9,8 +9,7 @@ import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import io.github.bucket4j.distributed.proxy.ProxyManager;
 import org.springframework.amqp.rabbit.connection.ConnectionFactory;
 import org.springframework.amqp.rabbit.core.RabbitTemplate;
-import org.springframework.batch.core.launch.JobLauncher;
-
+import org.springframework.batch.core.launch.JobOperator;
 @SpringBootTest
 @ActiveProfiles("test")
 @TestPropertySource(properties = {
@@ -39,7 +38,6 @@ class GmontinnyApplicationTests {
 
     @MockitoBean ConnectionFactory connectionFactory;
     @MockitoBean RabbitTemplate rabbitTemplate;
-    @MockitoBean JobLauncher asyncJobLauncher;
     @MockitoBean ProxyManager<String> rateLimitProxyManager;
 
     @Test
