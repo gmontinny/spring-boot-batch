@@ -11,9 +11,40 @@
 ![JWT](https://img.shields.io/badge/JWT-0.12.6-black?logo=jsonwebtokens)
 ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI%203.1-85EA2D?logo=swagger)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
-![Tests](https://img.shields.io/badge/Testes-44%2B%20casos-success?logo=junit5)
+![Tests](https://img.shields.io/badge/Testes-55%2B%20casos-success?logo=junit5)
 
 API REST para processamento em lote de dados CNAE a partir de planilhas Excel, com persistência em PostgreSQL, mensageria via RabbitMQ, segurança JWT com refresh token e rate limiting, secrets centralizados no HashiCorp Vault e documentação Swagger completa.
+
+---
+
+## 🚀 Início Rápido
+
+> Pré-requisitos: **Java 25** e **Docker Desktop** instalados e rodando.
+
+**Windows:**
+```bat
+start.bat
+```
+
+**Linux / macOS:**
+```bash
+chmod +x start.sh && ./start.sh
+```
+
+Os scripts fazem tudo automaticamente:
+1. Sobem PostgreSQL, RabbitMQ, Redis e Vault via Docker
+2. Populam os secrets no Vault
+3. Iniciam a aplicação Spring Boot
+
+Quando aparecer `Started GmontinnyApplication`, acesse:
+
+| O que | URL |
+|---|---|
+| Swagger UI (API interativa) | http://localhost:8080/swagger-ui.html |
+| RabbitMQ | http://localhost:15672 — `gmontinny` / `Gmontinny2026` |
+| Vault | http://localhost:8200/ui — token: `gmontinny-vault-token` |
+
+Login padrão: **admin** / **Admin@2026**
 
 ---
 
@@ -38,6 +69,7 @@ API REST para processamento em lote de dados CNAE a partir de planilhas Excel, c
 17. [Testes](#17-testes)
 18. [Configuração de Ambiente](#18-configuração-de-ambiente)
 19. [Como Executar](#19-como-executar)
+    - [Scripts de Início Rápido](#scripts-de-início-rápido)
 20. [Docker](#20-docker)
 21. [Boas Práticas Aplicadas](#21-boas-práticas-aplicadas)
 22. [Fluxo Completo de Uso](#22-fluxo-completo-de-uso)
@@ -67,7 +99,7 @@ O **GMontinny** é uma aplicação Spring Boot que demonstra uma arquitetura com
 | Hypermedia | Spring HATEOAS |
 | Documentação | SpringDoc OpenAPI 3 (Swagger UI) |
 | Containerização | Docker + Docker Compose (4 serviços) |
-| Testes | JUnit 5 + Mockito (44+ casos) |
+| Testes | JUnit 5 + Mockito (55+ casos) |
 
 ---
 
@@ -423,6 +455,8 @@ gmontinny/
 ├── .env                                       # PostgreSQL + RabbitMQ + Redis + Vault
 ├── docker-compose.yml                         # 4 serviços com healthcheck
 ├── Dockerfile                                 # Multi-stage build (JDK 25)
+├── start.bat                                  # Início rápido — Windows
+├── start.sh                                   # Início rápido — Linux/macOS
 └── build.gradle
 ```
 
@@ -982,9 +1016,53 @@ Requer `Authorization: Bearer <accessToken>`. Revoga todos os refresh tokens do 
 
 #### `POST /api/v1/batch/cnae/run`
 
+Retorna imediatamente com o `jobExecutionId`. Use o endpoint de status para acompanhar.
+
 **Response `200 OK`:**
 ```json
-{ "message": "Job iniciado com id: 1 | Status: STARTED" }
+{ "message": "Job iniciado com id: 1 | Status: STARTING" }
+```
+
+#### `GET /api/v1/batch/cnae/status/{jobExecutionId}`
+
+**Response `200 OK` — em execução:**
+```json
+{
+  "jobExecutionId": 1,
+  "status": "STARTED",
+  "exitCode": "UNKNOWN",
+  "startTime": "2026-09-05 10:42:22",
+  "endTime": null,
+  "lidos": 300,
+  "gravados": 200,
+  "pulados": 0,
+  "filtrados": 0
+}
+```
+
+**Response `200 OK` — concluído:**
+```json
+{
+  "jobExecutionId": 1,
+  "status": "COMPLETED",
+  "exitCode": "COMPLETED",
+  "startTime": "2026-09-05 10:42:22",
+  "endTime": "2026-09-05 10:42:23",
+  "lidos": 1118,
+  "gravados": 1118,
+  "pulados": 0,
+  "filtrados": 0
+}
+```
+
+**Response `200 OK` — falhou:**
+```json
+{
+  "jobExecutionId": 1,
+  "status": "FAILED",
+  "exitCode": "FAILED",
+  "erro": "mensagem do erro"
+}
 ```
 
 ---
@@ -1085,16 +1163,18 @@ Ambiente de teste: **H2 em memória**, Liquibase desabilitado, Vault desabilitad
 
 | Classe de Teste | Tipo | Casos | O que valida |
 |---|---|---|---|
-| `CnaeItemProcessorTest` | Unitário | 4 | Mapeamento, filtro nulo, publicação MQ |
+| `CnaeItemProcessorTest` | Unitário | 4 | Mapeamento, filtro nulo, publicação MQ tolerante a falha |
 | `CnaeItemWriterTest` | Unitário | 2 | `saveAll()`, chunk vazio |
-| `JwtServiceTest` | Unitário | 8 | Access token, refresh token, tipo errado como access, tipo errado como refresh, expirado, usuário diferente |
-| `AuthServiceTest` | Unitário | 5 | Login (par de tokens), credenciais inválidas, refresh rotation, token revogado, token expirado, logout |
+| `JwtServiceTest` | Unitário | 8 | Access token, refresh token, tipo errado, expirado, usuário diferente |
+| `AuthServiceTest` | Unitário | 5 | Login, credenciais inválidas, refresh rotation, token revogado, logout |
 | `UserServiceTest` | Unitário | 5 | Criação, 409 username, 409 email, 404, deleção |
 | `CnaeServiceTest` | Unitário | 4 | Paginação, findById, search, 404 |
 | `BatchServiceTest` | Unitário | 2 | Disparo OK, falha no launcher |
 | `CnaeEventConsumerTest` | Unitário | 3 | Mensagem válida, DLQ, campos nulos |
-| `AuthControllerTest` | Unitário | 6 | login 200, login 401 (exceção), refresh 200, refresh 401 (exceção), logout 204, logout falha |
-| `BatchControllerTest` | Unitário | 3 | runCnaeImport 200, falha propagada, chamada única ao service |
+| `AuthControllerTest` | Unitário | 6 | login 200, login 401, refresh 200, refresh 401, logout 204, logout falha |
+| `BatchControllerTest` | Unitário | 7 | run 200, run falha, run chamada única, status COMPLETED, status FAILED, status 404 |
+| `UserControllerTest` | Unitário | 6 | sort inválido → fallback id, sort válido, direction desc, 200, create 201, delete 204 |
+| `CnaeControllerTest` | Unitário | 5 | sort inválido → fallback id, sort válido desc, 200, search sort inválido, search 200 |
 | `GmontinnyApplicationTests` | Contexto | 1 | Spring context carrega sem erros |
 
 ### Executar os Testes
@@ -1225,7 +1305,28 @@ openssl rand -hex 64
 - Java 25 (JDK)
 - Docker e Docker Compose
 
-### Passo a Passo
+### Scripts de Início Rápido
+
+Use os scripts na raiz do projeto — eles automatizam todos os passos:
+
+```bat
+:: Windows
+start.bat
+```
+
+```bash
+# Linux / macOS
+chmod +x start.sh && ./start.sh
+```
+
+O script executa na ordem:
+1. Verifica se o Docker está rodando
+2. Sobe os 4 containers (`docker-compose up -d`)
+3. Aguarda o Vault ficar saudável
+4. Popula os secrets no Vault automaticamente
+5. Inicia a aplicação com `./gradlew bootRun`
+
+### Passo a Passo Manual
 
 **1. Clone o repositório**
 ```bash
@@ -1233,18 +1334,9 @@ git clone https://github.com/seu-usuario/gmontinny.git
 cd gmontinny
 ```
 
-**2. Suba a infraestrutura (4 serviços)**
+**2. Suba a infraestrutura**
 ```bash
 docker-compose up -d
-```
-
-Verifique os containers:
-```bash
-docker-compose ps
-# postgres_gmontinny   running   :5432
-# rabbitmq_gmontinny   running   :5672, :15672
-# redis_gmontinny      running   :6379
-# vault_gmontinny      running   :8200
 ```
 
 **3. Popule os secrets no Vault**
@@ -1255,6 +1347,8 @@ docker exec vault_gmontinny vault kv put secret/gmontinny \
   rabbitmq.password="Gmontinny2026" \
   redis.password="Redis2026"
 ```
+
+> ⚠️ O Vault em modo dev perde os secrets ao reiniciar o container. Sempre repopule após `docker-compose down` + `up`.
 
 **4. Execute a aplicação**
 ```bash
@@ -1428,16 +1522,18 @@ curl -X POST http://localhost:8080/api/v1/auth/refresh \
 # Retorna novo par de tokens (rotation)
 ```
 
-### 5. Disparar a importação CNAE
+### 5. Disparar a importação CNAE e acompanhar
 
 ```bash
+# Disparar
 curl -X POST http://localhost:8080/api/v1/batch/cnae/run \
   -H "Authorization: Bearer <ACCESS_TOKEN>"
+# { "message": "Job iniciado com id: 1 | Status: STARTING" }
 
-# Logs esperados:
-# [BATCH] Iniciando step 'cnaeImportStep'
-# [MQ] CNAE recebido — subclasse=0111-3/01, denominacao=Cultivo de arroz
-# [BATCH] Step finalizado — lidos=1318, gravados=1318, filtrados=0, pulados=0
+# Acompanhar status (use o id retornado acima)
+curl http://localhost:8080/api/v1/batch/cnae/status/1 \
+  -H "Authorization: Bearer <ACCESS_TOKEN>"
+# STARTING → STARTED → COMPLETED (lidos=1118, gravados=1118)
 ```
 
 ### 6. Testar o rate limiting
@@ -1508,7 +1604,9 @@ implementation 'org.springframework.batch:spring-batch-infrastructure'
 | `org.springframework.batch.core.JobExecution` | `org.springframework.batch.core.job.JobExecution` |
 | `org.springframework.batch.core.JobParameters` | `org.springframework.batch.core.job.parameters.JobParameters` |
 | `org.springframework.batch.core.JobParametersBuilder` | `org.springframework.batch.core.job.parameters.JobParametersBuilder` |
-| `org.springframework.batch.core.launch.support.RunIdIncrementer` | `org.springframework.batch.core.job.parameters.RunIdIncrementer` |
+| `org.springframework.batch.core.explore.JobExplorer` | `org.springframework.batch.core.repository.explore.JobExplorer` |
+| `org.springframework.batch.item.ItemStream` | `org.springframework.batch.infrastructure.item.ItemStream` |
+| `org.springframework.batch.item.ExecutionContext` | `org.springframework.batch.infrastructure.item.ExecutionContext` |
 
 ### Spring AMQP 4.x — API Alterada
 

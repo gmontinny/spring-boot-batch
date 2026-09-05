@@ -13,7 +13,8 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.data.domain.Page;
-import org.springframework.data.domain.Pageable;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.data.domain.Sort;
 import org.springframework.data.web.PagedResourcesAssembler;
 import org.springframework.hateoas.EntityModel;
 import org.springframework.hateoas.PagedModel;
@@ -22,6 +23,7 @@ import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.*;
 
 import java.net.URI;
+import java.util.Set;
 
 import static org.springframework.hateoas.server.mvc.WebMvcLinkBuilder.*;
 
@@ -35,13 +37,20 @@ public class UserController {
     private final UserService userService;
     private final PagedResourcesAssembler<UserResponse> assembler;
 
+    private static final Set<String> ALLOWED_SORT_FIELDS = Set.of("id", "username", "email", "enabled", "createdAt");
+
     @GetMapping
     @PreAuthorize("hasRole('ADMIN')")
     @Operation(summary = "Listar usuários", description = "Retorna lista paginada de usuários. Requer ADMIN.")
-    public ResponseEntity<PagedModel<EntityModel<UserResponse>>> findAll(Pageable pageable) {
-        Page<UserResponse> page = userService.findAll(pageable);
-        page.forEach(this::addLinks);
-        return ResponseEntity.ok(assembler.toModel(page));
+    public ResponseEntity<PagedModel<EntityModel<UserResponse>>> findAll(
+            @Parameter(description = "Número da página (0-based)", example = "0") @RequestParam(defaultValue = "0") int page,
+            @Parameter(description = "Tamanho da página", example = "10") @RequestParam(defaultValue = "10") int size,
+            @Parameter(description = "Campo de ordenação", example = "username") @RequestParam(defaultValue = "id") String sort,
+            @Parameter(description = "Direção: asc ou desc", example = "asc") @RequestParam(defaultValue = "asc") String direction) {
+        PageRequest pageable = buildPageRequest(page, size, sort, direction, ALLOWED_SORT_FIELDS, "id");
+        Page<UserResponse> result = userService.findAll(pageable);
+        result.forEach(this::addLinks);
+        return ResponseEntity.ok(assembler.toModel(result));
     }
 
     @GetMapping("/{id}")
@@ -81,6 +90,13 @@ public class UserController {
 
     private void addLinks(UserResponse response) {
         response.add(linkTo(methodOn(UserController.class).findById(response.getId())).withSelfRel());
-        response.add(linkTo(methodOn(UserController.class).findAll(Pageable.unpaged())).withRel("users"));
+        response.add(linkTo(methodOn(UserController.class).findAll(0, 10, "id", "asc")).withRel("users"));
+    }
+
+    private PageRequest buildPageRequest(int page, int size, String sort, String direction,
+                                         Set<String> allowed, String fallback) {
+        String field = allowed.contains(sort) ? sort : fallback;
+        Sort.Direction dir = "desc".equalsIgnoreCase(direction) ? Sort.Direction.DESC : Sort.Direction.ASC;
+        return PageRequest.of(Math.max(page, 0), Math.min(Math.max(size, 1), 100), Sort.by(dir, field));
     }
 }

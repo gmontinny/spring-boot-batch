@@ -8,7 +8,8 @@ import org.springframework.batch.infrastructure.item.ItemReader;
 import org.springframework.batch.infrastructure.item.NonTransientResourceException;
 import org.springframework.batch.infrastructure.item.ParseException;
 import org.springframework.batch.infrastructure.item.UnexpectedInputException;
-import org.springframework.core.io.ClassPathResource;
+import org.springframework.batch.infrastructure.item.ItemStream;
+import org.springframework.batch.infrastructure.item.ExecutionContext;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -17,12 +18,22 @@ import java.util.Iterator;
 import java.util.List;
 
 @Slf4j
-public class CnaeExcelReader implements ItemReader<CnaeRow> {
+public class CnaeExcelReader implements ItemReader<CnaeRow>, ItemStream {
 
     private static final String FILE_PATH = "data/CNAE20_EstruturaDetalhada.xls";
-    private static final int HEADER_ROWS = 5;
+    private static final int HEADER_ROWS = 3; // linha 0=título, 1=continua, 2=cabeçalho
 
     private Iterator<CnaeRow> iterator;
+
+    @Override
+    public void open(ExecutionContext executionContext) {
+        iterator = loadRows().iterator();
+    }
+
+    @Override
+    public void close() {
+        iterator = null;
+    }
 
     @Override
     public CnaeRow read() throws UnexpectedInputException, ParseException, NonTransientResourceException {
@@ -43,13 +54,13 @@ public class CnaeExcelReader implements ItemReader<CnaeRow> {
                 if (row == null) continue;
 
                 CnaeRow cnaeRow = new CnaeRow(
-                        cellValue(row, 0),
-                        cellValue(row, 1),
-                        cellValue(row, 2),
-                        cellValue(row, 3),
-                        cellValue(row, 4),
-                        cellValue(row, 5),
-                        cellValue(row, 6)
+                        cellValue(row, 0), // secao
+                        cellValue(row, 1), // divisao
+                        cellValue(row, 2), // grupo
+                        cellValue(row, 3), // classe
+                        null,              // subclasse (não existe neste arquivo)
+                        cellValue(row, 4), // denominacao
+                        cellValue(row, 5)  // observacoes
                 );
 
                 if (cnaeRow.getDenominacao() != null && !cnaeRow.getDenominacao().isBlank()) {

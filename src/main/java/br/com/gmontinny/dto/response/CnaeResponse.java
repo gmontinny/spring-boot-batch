@@ -1,13 +1,11 @@
 package br.com.gmontinny.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.hateoas.RepresentationModel;
 
 import java.time.LocalDateTime;
 
 @Schema(description = "Resposta com dados de CNAE")
-@JsonInclude(JsonInclude.Include.NON_NULL)
 public class CnaeResponse extends RepresentationModel<CnaeResponse> {
 
     @Schema(description = "ID do registro")

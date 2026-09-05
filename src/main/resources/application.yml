@@ -119,3 +119,5 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: alpha
   show-actuator: false
+  pageable-resolver-enabled: true
+  use-fqn: false

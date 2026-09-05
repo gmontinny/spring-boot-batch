@@ -21,7 +21,7 @@ public class CnaeItemProcessor implements ItemProcessor<CnaeRow, Cnae> {
     @Override
     public Cnae process(CnaeRow row) {
         if (row.getDenominacao() == null || row.getDenominacao().isBlank()) {
-            return null; // filtra registros inválidos
+            return null;
         }
 
         Cnae cnae = new Cnae();
@@ -34,11 +34,16 @@ public class CnaeItemProcessor implements ItemProcessor<CnaeRow, Cnae> {
         cnae.setObservacoes(row.getObservacoes());
         cnae.setProcessedAt(LocalDateTime.now());
 
-        rabbitTemplate.convertAndSend(
-                RabbitMQConfig.BATCH_EXCHANGE,
-                RabbitMQConfig.BATCH_ROUTING_KEY,
-                row
-        );
+        try {
+            rabbitTemplate.convertAndSend(
+                    RabbitMQConfig.BATCH_EXCHANGE,
+                    RabbitMQConfig.BATCH_ROUTING_KEY,
+                    row
+            );
+        } catch (Exception e) {
+            log.warn("[MQ] Falha ao publicar CNAE '{}' no RabbitMQ — persistindo mesmo assim. Erro: {}",
+                    row.getDenominacao(), e.getMessage());
+        }
 
         log.debug("Processado CNAE: {}", row.getDenominacao());
         return cnae;

@@ -1,6 +1,5 @@
 package br.com.gmontinny.dto.response;
 
-import com.fasterxml.jackson.annotation.JsonInclude;
 import io.swagger.v3.oas.annotations.media.Schema;
 import org.springframework.hateoas.RepresentationModel;
 
@@ -8,7 +7,6 @@ import java.time.LocalDateTime;
 import java.util.Set;
 
 @Schema(description = "Resposta com dados do usuário")
-@JsonInclude(JsonInclude.Include.NON_NULL)
 public class UserResponse extends RepresentationModel<UserResponse> {
 
     @Schema(description = "ID do usuário")
