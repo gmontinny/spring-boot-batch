@@ -11,9 +11,11 @@
 ![JWT](https://img.shields.io/badge/JWT-0.12.6-black?logo=jsonwebtokens)
 ![Swagger](https://img.shields.io/badge/Swagger-OpenAPI%203.1-85EA2D?logo=swagger)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker)
+![Kubernetes](https://img.shields.io/badge/Kubernetes-Kustomize-326CE5?logo=kubernetes)
+![Terraform](https://img.shields.io/badge/Terraform-AWS%20%7C%20GCP%20%7C%20Azure-7B42BC?logo=terraform)
 ![Tests](https://img.shields.io/badge/Testes-59%2B%20casos-success?logo=junit5)
 
-API REST para processamento em lote de dados CNAE a partir de planilhas Excel, com persistência em PostgreSQL, mensageria via RabbitMQ, segurança JWT com refresh token e rate limiting, secrets centralizados no HashiCorp Vault e documentação Swagger completa.
+API REST para processamento em lote de dados CNAE a partir de planilhas Excel, com persistência em PostgreSQL, mensageria via RabbitMQ, segurança JWT com refresh token e rate limiting, secrets centralizados no HashiCorp Vault, documentação Swagger completa e infraestrutura declarativa multi-cloud com Kubernetes (Kustomize) e Terraform para AWS, GCP e Azure.
 
 ---
 
@@ -71,9 +73,12 @@ Login padrão: **admin** / **Admin@2026**
 19. [Como Executar](#19-como-executar)
     - [Scripts de Início Rápido](#scripts-de-início-rápido)
 20. [Docker](#20-docker)
-21. [Boas Práticas Aplicadas](#21-boas-práticas-aplicadas)
-22. [Fluxo Completo de Uso](#22-fluxo-completo-de-uso)
-23. [Compatibilidade com Spring Boot 4.x / Spring 7.x](#23-compatibilidade-com-spring-boot-4x--spring-7x)
+21. [Kubernetes e Terraform](#21-kubernetes-e-terraform)
+    - [Kubernetes com Kustomize](#kubernetes-com-kustomize)
+    - [Terraform Multi-Cloud](#terraform-multi-cloud)
+22. [Boas Práticas Aplicadas](#22-boas-práticas-aplicadas)
+23. [Fluxo Completo de Uso](#23-fluxo-completo-de-uso)
+24. [Compatibilidade com Spring Boot 4.x / Spring 7.x](#24-compatibilidade-com-spring-boot-4x--spring-7x)
 
 ---
 
@@ -99,6 +104,8 @@ O **GMontinny** é uma aplicação Spring Boot que demonstra uma arquitetura com
 | Hypermedia | Spring HATEOAS |
 | Documentação | SpringDoc OpenAPI 3 (Swagger UI) |
 | Containerização | Docker + Docker Compose (4 serviços) |
+| Orquestração multi-cloud | Kubernetes (Kustomize) — AWS EKS, GCP GKE, Azure AKS |
+| Infraestrutura como Código | Terraform — AWS, GCP e Azure |
 | Testes | JUnit 5 + Mockito (59+ casos) |
 
 ---
@@ -133,6 +140,8 @@ O **GMontinny** é uma aplicação Spring Boot que demonstra uma arquitetura com
 | JUnit 5 + Mockito | via Boot (test) | Testes unitários e de integração |
 | Gradle | 9.7.1 | Build tool |
 | Docker | — | Containerização |
+| Kubernetes + Kustomize | 1.29+ / 5.x | Orquestração de contêineres (EKS, GKE, AKS) |
+| Terraform | 1.9+ | Provisionamento declarativo de infraestrutura multi-cloud |
 
 ---
 
@@ -459,7 +468,54 @@ gmontinny/
 ├── Dockerfile                                 # Multi-stage build (JDK 25)
 ├── start.bat                                  # Início rápido — Windows
 ├── start.sh                                   # Início rápido — Linux/macOS
-└── build.gradle
+├── build.gradle
+│
+└── infra/
+    ├── README.md                              # Guia completo de infra
+    ├── kubernetes/
+    │   ├── base/                              # Manifestos agnósticos de cloud
+    │   │   ├── namespace.yaml
+    │   │   ├── rbac.yaml                      # ServiceAccount + Role + RoleBinding
+    │   │   ├── configmap.yaml
+    │   │   ├── secret.yaml                    # Dev/CI — produção usa Vault Agent Injector
+    │   │   ├── deployment.yaml                # 2 réplicas, probes, Vault annotations
+    │   │   ├── service.yaml
+    │   │   ├── ingress.yaml
+    │   │   ├── hpa.yaml                       # HPA: 2–8 réplicas por CPU/memória
+    │   │   ├── pdb.yaml                       # PodDisruptionBudget: minAvailable=1
+    │   │   └── kustomization.yaml
+    │   └── overlays/
+    │       ├── aws/                           # ECR + IRSA + ALB Ingress (ACM)
+    │       │   ├── kustomization.yaml
+    │       │   ├── deployment-patch.yaml
+    │       │   └── ingress-patch.yaml
+    │       ├── gcp/                           # Artifact Registry + Workload Identity + Cloud SQL Proxy
+    │       │   ├── kustomization.yaml
+    │       │   ├── deployment-patch.yaml
+    │       │   └── ingress-patch.yaml
+    │       └── azure/                         # ACR + Workload Identity + AGIC
+    │           ├── kustomization.yaml
+    │           ├── deployment-patch.yaml
+    │           └── ingress-patch.yaml
+    └── terraform/
+        ├── aws/                               # EKS, ECR, RDS, ElastiCache, AmazonMQ, Secrets Manager
+        │   ├── main.tf                        # Providers + backend S3/DynamoDB
+        │   ├── variables.tf
+        │   ├── resources.tf                   # VPC, EKS, RDS, Redis, MQ, ALB Controller
+        │   ├── outputs.tf
+        │   └── terraform.tfvars
+        ├── gcp/                               # GKE, Artifact Registry, Cloud SQL, Memorystore, Secret Manager
+        │   ├── main.tf                        # Providers + backend GCS
+        │   ├── variables.tf
+        │   ├── resources.tf                   # VPC, GKE, Cloud SQL, Redis, Workload Identity
+        │   ├── outputs.tf
+        │   └── terraform.tfvars
+        └── azure/                             # AKS, ACR, PostgreSQL Flexible, Redis Cache, Key Vault
+            ├── main.tf                        # Providers + backend Azure Blob
+            ├── variables.tf
+            ├── resources.tf                   # VNet, AKS, PostgreSQL, Redis, Key Vault, AGIC
+            ├── outputs.tf
+            └── terraform.tfvars
 ```
 
 ---
@@ -1431,7 +1487,75 @@ docker-compose down -v      # parar + remover volumes
 
 ---
 
-## 21. Boas Práticas Aplicadas
+## 21. Kubernetes e Terraform
+
+A pasta `infra/` contém toda a infraestrutura declarativa do projeto, organizada em Kubernetes (Kustomize) e Terraform para os três principais provedores de nuvem.
+
+> Consulte [`infra/README.md`](infra/README.md) para o guia completo de deploy.
+
+### Kubernetes com Kustomize
+
+Os manifestos seguem o padrão `base/overlays` do Kustomize:
+
+**Base** (`infra/kubernetes/base/`) — agnóstico de cloud:
+- `Deployment` com 2 réplicas, liveness/readiness probes em `/actuator/health`, recursos definidos (requests/limits) e anotações do **Vault Agent Injector** para injeção de secrets em produção
+- `HorizontalPodAutoscaler` — escala de 2 a 8 réplicas por CPU (70%) e memória (80%)
+- `PodDisruptionBudget` — `minAvailable: 1` garante disponibilidade durante atualizações
+- `RBAC` — ServiceAccount com Role mínima (principle of least privilege)
+- Container com `runAsNonRoot`, `readOnlyRootFilesystem` e `capabilities: drop ALL`
+
+**Overlays** (`infra/kubernetes/overlays/`) — customizações por provedor:
+
+| Overlay | Imagem | Identity | Ingress |
+|---|---|---|---|
+| `aws/` | ECR | IRSA annotation | AWS Load Balancer Controller (ALB + ACM) |
+| `gcp/` | Artifact Registry | Workload Identity + Cloud SQL Proxy sidecar | GCE Ingress + ManagedCertificate |
+| `azure/` | ACR | Workload Identity label | AGIC (Application Gateway) + cert-manager |
+
+**Deploy:**
+```bash
+# Configurar contexto
+aws eks update-kubeconfig --region us-east-1 --name gmontinny-eks          # AWS
+gcloud container clusters get-credentials gmontinny-gke --region us-central1  # GCP
+az aks get-credentials -g gmontinny-rg -n gmontinny-aks                    # Azure
+
+# Aplicar
+kubectl apply -k infra/kubernetes/overlays/aws    # ou gcp / azure
+```
+
+### Terraform Multi-Cloud
+
+Cada provedor tem módulo independente com backend de estado remoto, variáveis tipadas e outputs para integração com os overlays Kubernetes:
+
+| Recurso | AWS | GCP | Azure |
+|---|---|---|---|
+| Kubernetes | EKS 1.31 | GKE (Workload Identity) | AKS 1.31 |
+| Registry | ECR | Artifact Registry | ACR |
+| PostgreSQL | RDS 16 Multi-AZ | Cloud SQL 16 HA (IP privado) | PostgreSQL Flexible 16 |
+| Redis | ElastiCache HA + TLS | Memorystore HA + TLS | Azure Cache for Redis (TLS 1.2) |
+| RabbitMQ | Amazon MQ 3.13 Cluster | Helm no GKE | Helm no AKS |
+| Secrets | Secrets Manager | Secret Manager | Key Vault |
+| Identity | IRSA | Workload Identity | Workload Identity |
+| Ingress | ALB Controller | GCE + ManagedCert | AGIC |
+| State backend | S3 + DynamoDB lock | GCS | Azure Blob |
+
+**Uso:**
+```bash
+cd infra/terraform/aws   # ou gcp / azure
+
+terraform init
+terraform plan \
+  -var="db_password=<senha>" \
+  -var="redis_password=<senha>" \
+  -var="rabbitmq_password=<senha>"
+terraform apply
+```
+
+> Nunca coloque secrets no `terraform.tfvars`. Use variáveis de ambiente (`TF_VAR_*`) ou um arquivo `secrets.tfvars` fora do controle de versão.
+
+---
+
+## 22. Boas Práticas Aplicadas
 
 ### Segurança
 
@@ -1468,6 +1592,18 @@ docker-compose down -v      # parar + remover volumes
 | Agendamento automático | `@EnableScheduling` + `@Scheduled` |
 | Observabilidade | `StepExecutionListener` com métricas completas |
 
+### Infraestrutura
+
+| Prática | Implementação |
+|---|---|
+| Container não-root | `USER spring:spring` no Dockerfile |
+| Multi-stage build | Imagem de runtime sem JDK, apenas JRE |
+| Kubernetes base/overlays | Manifestos agnósticos reutilizados nos 3 provedores |
+| HPA + PDB | Escala automática e disponibilidade garantida durante deploys |
+| Terraform por provedor | Módulos independentes com backend remoto e state lock |
+| Secrets nunca em IaC | Passados via `TF_VAR_*` ou arquivo fora do controle de versão |
+| Workload Identity | IRSA (AWS), Workload Identity (GCP/Azure) — sem credenciais estáticas |
+
 ### Mensageria
 
 | Prática | Implementação |
@@ -1479,7 +1615,7 @@ docker-compose down -v      # parar + remover volumes
 
 ---
 
-## 22. Fluxo Completo de Uso
+## 23. Fluxo Completo de Uso
 
 ### 1. Subir a infraestrutura
 
@@ -1579,9 +1715,35 @@ Descomente em `BatchService.java`:
 public void runScheduled() { runCnaeImport(); }
 ```
 
+### 11. Deploy em nuvem (Kubernetes + Terraform)
+
+```bash
+# 1. Provisionar infraestrutura (exemplo AWS)
+cd infra/terraform/aws
+terraform init && terraform apply \
+  -var="db_password=<senha>" \
+  -var="redis_password=<senha>" \
+  -var="rabbitmq_password=<senha>"
+
+# 2. Configurar kubectl
+aws eks update-kubeconfig --region us-east-1 --name gmontinny-eks
+
+# 3. Substituir placeholders no overlay (endpoints do Terraform output)
+# infra/kubernetes/overlays/aws/deployment-patch.yaml
+
+# 4. Deploy
+kubectl apply -k infra/kubernetes/overlays/aws
+
+# 5. Verificar
+kubectl get pods -n gmontinny
+kubectl get hpa -n gmontinny
+```
+
+> Para GCP e Azure, use os overlays `gcp/` e `azure/` respectivamente. Consulte [`infra/README.md`](infra/README.md).
+
 ---
 
-## 23. Compatibilidade com Spring Boot 4.x / Spring 7.x
+## 24. Compatibilidade com Spring Boot 4.x / Spring 7.x
 
 Este projeto usa Spring Boot **4.1.1** com Java **25** — versões de ponta que introduziram quebras de compatibilidade significativas em relação ao ecossistema anterior. As adaptações abaixo foram identificadas inspecionando os JARs diretamente.
 
